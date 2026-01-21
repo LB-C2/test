@@ -15,3 +15,8 @@ The page loads a GLB/GLTF file and offers a USDZ fallback for iOS devices.
    Look.
 
 Feel free to replace the file paths in `index.html` with your own models.
+
+## PlinthCAD Specification
+
+See `PlinthCAD-spec.md` for the full application specification for the
+lightweight 3D CAD tool described in the prompt.
