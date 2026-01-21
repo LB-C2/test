@@ -2,16 +2,854 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>3D Viewer</title>
-  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <title>PlinthCAD — Lightweight 3D Layout Tool</title>
   <style>
-    body, html { margin: 0; height: 100%; }
-    model-viewer { width: 100%; height: 100%; }
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", system-ui, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      background: #f4f5f7;
+      color: #1f2933;
+    }
+
+    aside {
+      padding: 16px;
+      border-right: 1px solid #d9dde3;
+      background: #ffffff;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 14px;
+      margin: 0 0 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #52606d;
+    }
+
+    .panel {
+      border: 1px solid #d9dde3;
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    label {
+      font-size: 12px;
+      color: #52606d;
+    }
+
+    input, select, button, textarea {
+      font: inherit;
+    }
+
+    input[type="number"],
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid #cbd2d9;
+      background: #fff;
+    }
+
+    button {
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #cbd2d9;
+      background: #f5f7fa;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+
+    button:hover {
+      background: #e4e7eb;
+    }
+
+    button.primary {
+      background: #1d4ed8;
+      color: #fff;
+      border-color: #1d4ed8;
+    }
+
+    button.primary:hover {
+      background: #1e40af;
+    }
+
+    .list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .list button {
+      text-align: left;
+    }
+
+    .list button.active {
+      background: #dbeafe;
+      border-color: #93c5fd;
+    }
+
+    #viewport {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    .label {
+      padding: 2px 6px;
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid #d9dde3;
+      border-radius: 4px;
+      font-size: 11px;
+      color: #111827;
+      white-space: nowrap;
+    }
+
+    .dimension-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .muted {
+      font-size: 12px;
+      color: #7b8794;
+    }
   </style>
 </head>
 <body>
-  <model-viewer src="model.glb" ios-src="model.usdz" alt="3D model"
-    ar ar-modes="scene-viewer webxr quick-look" environment-image="neutral"
-    exposure="1" auto-rotate camera-controls></model-viewer>
+  <aside>
+    <div>
+      <h1>PlinthCAD</h1>
+      <div class="muted">Parametric 3D layout for slabs, plinths, and bunds.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Objects</h2>
+      <div class="row">
+        <button id="add-slab" class="primary">Add slab</button>
+        <button id="add-plinth">Add plinth</button>
+        <button id="add-bund">Add bund</button>
+      </div>
+      <div class="list" id="object-list"></div>
+      <div class="row">
+        <button id="duplicate-object">Duplicate</button>
+        <button id="delete-object">Delete</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Selection</h2>
+      <label for="object-name">Name</label>
+      <input id="object-name" type="text" placeholder="Select an object" disabled>
+
+      <div class="row">
+        <div style="flex: 1;">
+          <label for="pos-x">Pos X</label>
+          <input id="pos-x" type="number" step="1" disabled>
+        </div>
+        <div style="flex: 1;">
+          <label for="pos-y">Pos Y</label>
+          <input id="pos-y" type="number" step="1" disabled>
+        </div>
+        <div style="flex: 1;">
+          <label for="pos-z">Pos Z</label>
+          <input id="pos-z" type="number" step="1" disabled>
+        </div>
+      </div>
+
+      <div class="row">
+        <div style="flex: 1;">
+          <label for="dim-length">Length</label>
+          <input id="dim-length" type="number" step="1" disabled>
+        </div>
+        <div style="flex: 1;">
+          <label for="dim-width">Width</label>
+          <input id="dim-width" type="number" step="1" disabled>
+        </div>
+        <div style="flex: 1;">
+          <label for="dim-height">Height</label>
+          <input id="dim-height" type="number" step="1" disabled>
+        </div>
+      </div>
+
+      <label for="rotation">Yaw (deg)</label>
+      <input id="rotation" type="number" step="1" disabled>
+    </div>
+
+    <div class="panel">
+      <h2>Alignment</h2>
+      <label for="align-target">Target object</label>
+      <select id="align-target"></select>
+      <label for="align-axis">Axis</label>
+      <select id="align-axis">
+        <option value="X">X (Left/Right)</option>
+        <option value="Y">Y (Front/Back)</option>
+      </select>
+      <div class="row">
+        <button data-align="LEFT">Left</button>
+        <button data-align="CENTER">Center</button>
+        <button data-align="RIGHT">Right</button>
+      </div>
+      <div class="muted">Select a source object, then align it to the target.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Dimensions</h2>
+      <label for="dim-from">From object</label>
+      <select id="dim-from"></select>
+      <label for="dim-from-face">From face</label>
+      <select id="dim-from-face">
+        <option value="LEFT">Left</option>
+        <option value="RIGHT">Right</option>
+        <option value="FRONT">Front</option>
+        <option value="BACK">Back</option>
+      </select>
+      <label for="dim-to">To object</label>
+      <select id="dim-to"></select>
+      <label for="dim-to-face">To face</label>
+      <select id="dim-to-face">
+        <option value="LEFT">Left</option>
+        <option value="RIGHT">Right</option>
+        <option value="FRONT">Front</option>
+        <option value="BACK">Back</option>
+      </select>
+      <button id="add-dimension" class="primary">Add dimension</button>
+      <div class="dimension-list" id="dimension-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Camera Presets</h2>
+      <div class="row">
+        <button data-camera="isometric">Isometric</button>
+        <button data-camera="top">Top</button>
+        <button data-camera="front">Front</button>
+        <button data-camera="side">Side</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>File</h2>
+      <div class="row">
+        <button id="save-file">Save JSON</button>
+        <label for="load-file" style="flex:1;">
+          <input id="load-file" type="file" accept="application/json" style="width:100%;">
+        </label>
+      </div>
+    </div>
+  </aside>
+
+  <div id="viewport"></div>
+
+  <script type="module">
+    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
+    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
+    import { CSS2DRenderer, CSS2DObject } from "https://unpkg.com/three@0.160.0/examples/jsm/renderers/CSS2DRenderer.js";
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xf1f5f9);
+    scene.up.set(0, 0, 1);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth - 320, window.innerHeight);
+
+    const labelRenderer = new CSS2DRenderer();
+    labelRenderer.setSize(window.innerWidth - 320, window.innerHeight);
+    labelRenderer.domElement.style.position = "absolute";
+    labelRenderer.domElement.style.top = "0";
+    labelRenderer.domElement.style.pointerEvents = "none";
+
+    const viewport = document.getElementById("viewport");
+    viewport.appendChild(renderer.domElement);
+    viewport.appendChild(labelRenderer.domElement);
+
+    const camera = new THREE.PerspectiveCamera(50, (window.innerWidth - 320) / window.innerHeight, 1, 50000);
+    camera.up.set(0, 0, 1);
+    camera.position.set(6000, 6000, 4000);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.maxPolarAngle = Math.PI / 2.02;
+    controls.screenSpacePanning = false;
+    controls.target.set(0, 0, 0);
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x94a3b8, 1.0);
+    scene.add(hemiLight);
+
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(1000, -2000, 3000);
+    scene.add(dirLight);
+
+    const gridHelper = new THREE.GridHelper(20000, 40, 0xcbd5f5, 0xe2e8f0);
+    gridHelper.rotation.x = Math.PI / 2;
+    scene.add(gridHelper);
+
+    const state = {
+      units: "mm",
+      objects: [],
+      dimensions: [],
+      camera: {}
+    };
+
+    const objectMeshes = new Map();
+    const dimensionVisuals = new Map();
+
+    const defaultDimensions = {
+      SLAB: { length: 6000, width: 4000, height: 300 },
+      PLINTH: { length: 1200, width: 1200, height: 800 },
+      BUND: { length: 4000, width: 400, height: 600 }
+    };
+
+    const materials = {
+      SLAB: new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.9, metalness: 0 }),
+      PLINTH: new THREE.MeshStandardMaterial({ color: 0x6b7280, roughness: 0.85, metalness: 0 }),
+      BUND: new THREE.MeshStandardMaterial({ color: 0x4b5563, roughness: 0.85, metalness: 0 })
+    };
+
+    const outlineMaterial = new THREE.LineBasicMaterial({ color: 0x111827 });
+
+    const elements = {
+      list: document.getElementById("object-list"),
+      name: document.getElementById("object-name"),
+      posX: document.getElementById("pos-x"),
+      posY: document.getElementById("pos-y"),
+      posZ: document.getElementById("pos-z"),
+      dimLength: document.getElementById("dim-length"),
+      dimWidth: document.getElementById("dim-width"),
+      dimHeight: document.getElementById("dim-height"),
+      rotation: document.getElementById("rotation"),
+      alignTarget: document.getElementById("align-target"),
+      alignAxis: document.getElementById("align-axis"),
+      dimFrom: document.getElementById("dim-from"),
+      dimFromFace: document.getElementById("dim-from-face"),
+      dimTo: document.getElementById("dim-to"),
+      dimToFace: document.getElementById("dim-to-face"),
+      dimensionList: document.getElementById("dimension-list")
+    };
+
+    let selectedId = null;
+
+    const clampNumber = (value) => Number.isFinite(value) ? value : 0;
+
+    const createBoxGeometry = (length, width, height) => {
+      const geometry = new THREE.BoxGeometry(length, width, height);
+      geometry.computeVertexNormals();
+      return geometry;
+    };
+
+    const addObject = (type) => {
+      const id = crypto.randomUUID();
+      const dims = { ...defaultDimensions[type] };
+      const namePrefix = type === "SLAB" ? "S" : type === "BUND" ? "B" : "P";
+      const name = `${namePrefix}-${state.objects.length + 1}`;
+      const position = { x: 0, y: 0, z: dims.height / 2 };
+
+      const object = {
+        id,
+        name,
+        type,
+        position,
+        rotation: { x: 0, y: 0, z: 0 },
+        dimensions: dims
+      };
+
+      state.objects.push(object);
+      createMeshForObject(object);
+      refreshUI();
+      selectObject(id);
+    };
+
+    const createMeshForObject = (object) => {
+      const geometry = createBoxGeometry(object.dimensions.length, object.dimensions.width, object.dimensions.height);
+      const mesh = new THREE.Mesh(geometry, materials[object.type]);
+      mesh.position.set(object.position.x, object.position.y, object.position.z);
+      mesh.rotation.z = THREE.MathUtils.degToRad(object.rotation.z || 0);
+
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), outlineMaterial);
+      edges.position.copy(mesh.position);
+      edges.rotation.copy(mesh.rotation);
+
+      scene.add(mesh);
+      scene.add(edges);
+
+      objectMeshes.set(object.id, { mesh, edges });
+    };
+
+    const updateMeshForObject = (object) => {
+      const entry = objectMeshes.get(object.id);
+      if (!entry) return;
+
+      entry.mesh.geometry.dispose();
+      entry.edges.geometry.dispose();
+
+      const geometry = createBoxGeometry(object.dimensions.length, object.dimensions.width, object.dimensions.height);
+      entry.mesh.geometry = geometry;
+      entry.edges.geometry = new THREE.EdgesGeometry(geometry);
+
+      entry.mesh.position.set(object.position.x, object.position.y, object.position.z);
+      entry.edges.position.copy(entry.mesh.position);
+
+      entry.mesh.rotation.z = THREE.MathUtils.degToRad(object.rotation.z || 0);
+      entry.edges.rotation.copy(entry.mesh.rotation);
+    };
+
+    const removeObject = (objectId) => {
+      const index = state.objects.findIndex((obj) => obj.id === objectId);
+      if (index === -1) return;
+
+      const entry = objectMeshes.get(objectId);
+      if (entry) {
+        entry.mesh.geometry.dispose();
+        entry.edges.geometry.dispose();
+        scene.remove(entry.mesh);
+        scene.remove(entry.edges);
+        objectMeshes.delete(objectId);
+      }
+
+      state.objects.splice(index, 1);
+      state.dimensions = state.dimensions.filter((dim) => dim.fromObjectId !== objectId && dim.toObjectId !== objectId);
+      refreshDimensions();
+      refreshUI();
+    };
+
+    const selectObject = (objectId) => {
+      selectedId = objectId;
+      refreshUI();
+    };
+
+    const refreshUI = () => {
+      elements.list.innerHTML = "";
+      state.objects.forEach((object) => {
+        const button = document.createElement("button");
+        button.textContent = `${object.name} · ${object.type}`;
+        if (object.id === selectedId) {
+          button.classList.add("active");
+        }
+        button.addEventListener("click", () => selectObject(object.id));
+        elements.list.appendChild(button);
+      });
+
+      const selectedObject = state.objects.find((obj) => obj.id === selectedId);
+      const inputs = [
+        elements.name,
+        elements.posX,
+        elements.posY,
+        elements.posZ,
+        elements.dimLength,
+        elements.dimWidth,
+        elements.dimHeight,
+        elements.rotation
+      ];
+
+      inputs.forEach((input) => {
+        input.disabled = !selectedObject;
+      });
+
+      if (selectedObject) {
+        elements.name.value = selectedObject.name;
+        elements.posX.value = selectedObject.position.x;
+        elements.posY.value = selectedObject.position.y;
+        elements.posZ.value = selectedObject.position.z;
+        elements.dimLength.value = selectedObject.dimensions.length;
+        elements.dimWidth.value = selectedObject.dimensions.width;
+        elements.dimHeight.value = selectedObject.dimensions.height;
+        elements.rotation.value = selectedObject.rotation.z;
+      } else {
+        inputs.forEach((input) => {
+          input.value = "";
+        });
+      }
+
+      const populateSelect = (select) => {
+        select.innerHTML = "";
+        state.objects.forEach((object) => {
+          const option = document.createElement("option");
+          option.value = object.id;
+          option.textContent = object.name;
+          select.appendChild(option);
+        });
+      };
+
+      populateSelect(elements.alignTarget);
+      populateSelect(elements.dimFrom);
+      populateSelect(elements.dimTo);
+    };
+
+    const updateSelectedField = (field, value) => {
+      const selectedObject = state.objects.find((obj) => obj.id === selectedId);
+      if (!selectedObject) return;
+
+      field(selectedObject, value);
+      updateMeshForObject(selectedObject);
+      refreshDimensions();
+      refreshUI();
+    };
+
+    const getFaceData = (object, face) => {
+      const halfLength = object.dimensions.length / 2;
+      const halfWidth = object.dimensions.width / 2;
+      const yaw = THREE.MathUtils.degToRad(object.rotation.z || 0);
+
+      let localNormal = new THREE.Vector3(1, 0, 0);
+      let localOffset = new THREE.Vector3(halfLength, 0, 0);
+
+      switch (face) {
+        case "LEFT":
+          localNormal = new THREE.Vector3(-1, 0, 0);
+          localOffset = new THREE.Vector3(-halfLength, 0, 0);
+          break;
+        case "RIGHT":
+          localNormal = new THREE.Vector3(1, 0, 0);
+          localOffset = new THREE.Vector3(halfLength, 0, 0);
+          break;
+        case "FRONT":
+          localNormal = new THREE.Vector3(0, 1, 0);
+          localOffset = new THREE.Vector3(0, halfWidth, 0);
+          break;
+        case "BACK":
+          localNormal = new THREE.Vector3(0, -1, 0);
+          localOffset = new THREE.Vector3(0, -halfWidth, 0);
+          break;
+        default:
+          break;
+      }
+
+      const rotationMatrix = new THREE.Matrix4().makeRotationZ(yaw);
+      const worldNormal = localNormal.clone().applyMatrix4(rotationMatrix).normalize();
+      const worldOffset = localOffset.clone().applyMatrix4(rotationMatrix);
+      const worldCenter = new THREE.Vector3(
+        object.position.x,
+        object.position.y,
+        object.position.z
+      ).add(worldOffset);
+
+      return { worldCenter, worldNormal };
+    };
+
+    const refreshDimensions = () => {
+      elements.dimensionList.innerHTML = "";
+
+      state.dimensions.forEach((dimension) => {
+        const fromObject = state.objects.find((obj) => obj.id === dimension.fromObjectId);
+        const toObject = state.objects.find((obj) => obj.id === dimension.toObjectId);
+        if (!fromObject || !toObject) {
+          return;
+        }
+
+        const fromData = getFaceData(fromObject, dimension.fromFace);
+        const toData = getFaceData(toObject, dimension.toFace);
+        const offsetVector = new THREE.Vector3().subVectors(toData.worldCenter, fromData.worldCenter);
+        dimension.value = Math.abs(offsetVector.dot(fromData.worldNormal));
+
+        let visual = dimensionVisuals.get(dimension.id);
+        if (!visual) {
+          const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+            fromData.worldCenter,
+            toData.worldCenter
+          ]);
+          const line = new THREE.Line(lineGeometry, new THREE.LineBasicMaterial({ color: 0x0f172a }));
+          scene.add(line);
+
+          const label = document.createElement("div");
+          label.className = "label";
+          const labelObject = new CSS2DObject(label);
+          scene.add(labelObject);
+
+          visual = { line, label: labelObject, labelElement: label };
+          dimensionVisuals.set(dimension.id, visual);
+        }
+
+        visual.line.geometry.setFromPoints([fromData.worldCenter, toData.worldCenter]);
+        visual.labelElement.textContent = `${dimension.value.toFixed(0)} ${state.units}`;
+        visual.label.position.copy(fromData.worldCenter).add(toData.worldCenter).multiplyScalar(0.5);
+
+        const listItem = document.createElement("button");
+        listItem.textContent = `${fromObject.name} ${dimension.fromFace} → ${toObject.name} ${dimension.toFace}: ${dimension.value.toFixed(0)} ${state.units}`;
+        listItem.addEventListener("click", () => {
+          state.dimensions = state.dimensions.filter((item) => item.id !== dimension.id);
+          const visuals = dimensionVisuals.get(dimension.id);
+          if (visuals) {
+            visuals.line.geometry.dispose();
+            scene.remove(visuals.line);
+            scene.remove(visuals.label);
+            dimensionVisuals.delete(dimension.id);
+          }
+          refreshDimensions();
+        });
+        elements.dimensionList.appendChild(listItem);
+      });
+    };
+
+    const alignObjects = (source, target, mode, axis) => {
+      if (!source || !target) return;
+
+      const sourceHalf = axis === "X" ? source.dimensions.length / 2 : source.dimensions.width / 2;
+      const targetHalf = axis === "X" ? target.dimensions.length / 2 : target.dimensions.width / 2;
+
+      let targetValue = axis === "X" ? target.position.x : target.position.y;
+      if (mode === "LEFT") {
+        targetValue -= targetHalf;
+      } else if (mode === "RIGHT") {
+        targetValue += targetHalf;
+      }
+
+      let sourceOffset = 0;
+      if (mode === "LEFT") {
+        sourceOffset = -sourceHalf;
+      } else if (mode === "RIGHT") {
+        sourceOffset = sourceHalf;
+      }
+
+      if (axis === "X") {
+        source.position.x = targetValue - sourceOffset;
+      } else {
+        source.position.y = targetValue - sourceOffset;
+      }
+
+      updateMeshForObject(source);
+      refreshDimensions();
+      refreshUI();
+    };
+
+    document.getElementById("add-slab").addEventListener("click", () => addObject("SLAB"));
+    document.getElementById("add-plinth").addEventListener("click", () => addObject("PLINTH"));
+    document.getElementById("add-bund").addEventListener("click", () => addObject("BUND"));
+
+    document.getElementById("duplicate-object").addEventListener("click", () => {
+      const selectedObject = state.objects.find((obj) => obj.id === selectedId);
+      if (!selectedObject) return;
+      const copy = JSON.parse(JSON.stringify(selectedObject));
+      copy.id = crypto.randomUUID();
+      copy.name = `${selectedObject.name}-copy`;
+      copy.position.x += 200;
+      copy.position.y += 200;
+      state.objects.push(copy);
+      createMeshForObject(copy);
+      refreshUI();
+      selectObject(copy.id);
+    });
+
+    document.getElementById("delete-object").addEventListener("click", () => {
+      if (!selectedId) return;
+      removeObject(selectedId);
+      selectedId = null;
+      refreshUI();
+    });
+
+    document.getElementById("add-dimension").addEventListener("click", () => {
+      if (!state.objects.length) return;
+      const fromObjectId = elements.dimFrom.value || state.objects[0].id;
+      const toObjectId = elements.dimTo.value || state.objects[0].id;
+      if (fromObjectId === toObjectId) return;
+
+      const dimension = {
+        id: crypto.randomUUID(),
+        fromObjectId,
+        fromFace: elements.dimFromFace.value,
+        toObjectId,
+        toFace: elements.dimToFace.value,
+        value: 0
+      };
+      state.dimensions.push(dimension);
+      refreshDimensions();
+    });
+
+    document.querySelectorAll("[data-align]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const selectedObject = state.objects.find((obj) => obj.id === selectedId);
+        const targetObject = state.objects.find((obj) => obj.id === elements.alignTarget.value);
+        if (!selectedObject || !targetObject || selectedObject.id === targetObject.id) {
+          return;
+        }
+        alignObjects(selectedObject, targetObject, button.dataset.align, elements.alignAxis.value);
+      });
+    });
+
+    document.querySelectorAll("[data-camera]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const preset = button.dataset.camera;
+        const distance = 8000;
+        if (preset === "isometric") {
+          camera.position.set(distance, distance, distance * 0.7);
+        } else if (preset === "top") {
+          camera.position.set(0, 0, distance);
+        } else if (preset === "front") {
+          camera.position.set(0, -distance, distance * 0.1);
+        } else if (preset === "side") {
+          camera.position.set(distance, 0, distance * 0.1);
+        }
+        controls.target.set(0, 0, 0);
+        controls.update();
+      });
+    });
+
+    document.getElementById("save-file").addEventListener("click", () => {
+      const payload = {
+        units: state.units,
+        objects: state.objects,
+        dimensions: state.dimensions.map(({ id, ...rest }) => rest),
+        camera: {
+          position: camera.position.toArray(),
+          target: controls.target.toArray()
+        }
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "plinthcad-layout.json";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+
+    document.getElementById("load-file").addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const data = JSON.parse(reader.result);
+          state.units = data.units || "mm";
+          state.objects = [];
+          state.dimensions = [];
+
+          objectMeshes.forEach((entry) => {
+            entry.mesh.geometry.dispose();
+            entry.edges.geometry.dispose();
+            scene.remove(entry.mesh);
+            scene.remove(entry.edges);
+          });
+          objectMeshes.clear();
+
+          dimensionVisuals.forEach((visual) => {
+            visual.line.geometry.dispose();
+            scene.remove(visual.line);
+            scene.remove(visual.label);
+          });
+          dimensionVisuals.clear();
+
+          (data.objects || []).forEach((object) => {
+            state.objects.push(object);
+            createMeshForObject(object);
+          });
+
+          (data.dimensions || []).forEach((dimension) => {
+            state.dimensions.push({ id: crypto.randomUUID(), ...dimension });
+          });
+
+          if (data.camera?.position) {
+            camera.position.fromArray(data.camera.position);
+          }
+          if (data.camera?.target) {
+            controls.target.fromArray(data.camera.target);
+          }
+          controls.update();
+
+          selectedId = null;
+          refreshUI();
+          refreshDimensions();
+        } catch (error) {
+          console.error("Failed to load file", error);
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    elements.name.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.name = event.target.value;
+      });
+    });
+
+    elements.posX.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.position.x = clampNumber(parseFloat(event.target.value));
+      });
+    });
+
+    elements.posY.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.position.y = clampNumber(parseFloat(event.target.value));
+      });
+    });
+
+    elements.posZ.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.position.z = clampNumber(parseFloat(event.target.value));
+      });
+    });
+
+    elements.dimLength.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.dimensions.length = Math.max(1, clampNumber(parseFloat(event.target.value)));
+      });
+    });
+
+    elements.dimWidth.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.dimensions.width = Math.max(1, clampNumber(parseFloat(event.target.value)));
+      });
+    });
+
+    elements.dimHeight.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.dimensions.height = Math.max(1, clampNumber(parseFloat(event.target.value)));
+      });
+    });
+
+    elements.rotation.addEventListener("input", (event) => {
+      updateSelectedField((object) => {
+        object.rotation.z = clampNumber(parseFloat(event.target.value));
+      });
+    });
+
+    const updateSizes = () => {
+      const width = window.innerWidth - 320;
+      const height = window.innerHeight;
+      renderer.setSize(width, height);
+      labelRenderer.setSize(width, height);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+    };
+
+    window.addEventListener("resize", updateSizes);
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+      labelRenderer.render(scene, camera);
+    };
+
+    refreshUI();
+    animate();
+  </script>
 </body>
 </html>
